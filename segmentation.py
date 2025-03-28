@@ -8,7 +8,7 @@ img = torch.Tensor([2, 5, 13, 20])
 img = img.view(1, 1, 2, 2)
 
 convTransposed = nn.ConvTranspose2d(in_channels  = 1,
-                                    out_channels = 2,
+                                    out_channels = 1,
                                     kernel_size  = 3,
                                     stride       = 2,
                                     padding      = 1)
@@ -19,6 +19,8 @@ print(out)
  
 """Задание № 1
 Создать тензор размера 4 x 4 к нему применить Transposed convolution
+Выяснить как изменится размер исходной картинки после применения Transposed convolution
+Изменить параметры stride и padding
 """
 
 
