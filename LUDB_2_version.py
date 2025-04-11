@@ -1,3 +1,6 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 import wfdb
 import os
 
@@ -13,6 +16,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from tqdm import tqdm
 
+from Preprocess import preprocess_ecg
 
 from UNet_ECG import UNet
 
@@ -48,20 +52,19 @@ def process_patient(base_filename, data_dir, lead = "i", start_index = 1000, end
     record_path = os.path.join(data_dir, f"{base_filename}")
     
     record = wfdb.rdrecord(record_path, physical=False)
-   
+    
     # Получаем названия отведений
     lead_names = record.sig_name
     
     idx_lead = lead_names.index(lead)
     
     adc_signal = record.d_signal[:, idx_lead]  # Берём один канал
-   
+       
     # Преобразуем в физические единицы (мВ)
     gain = record.adc_gain[idx_lead]  # Коэффициент усиления (например, 1000)
     baseline = record.baseline[idx_lead]  # Смещение (обычно 0)
     ecg_mv = (adc_signal - baseline) / gain
-    
-    
+      
     # Чтение аннотаций
     annotation = wfdb.rdann(record_path, lead).sample
     
@@ -69,14 +72,14 @@ def process_patient(base_filename, data_dir, lead = "i", start_index = 1000, end
 
     qrs = [0]*len(ecg_mv)
 
-    for i in range(0, len(annotation) - 3, 9):
+    for i in range(0, len(annotation), 9):
         for k in range(annotation[i], annotation[i+2]+1):
             qrs[k] = 1
             background[k] = 0
             
             
     t = [0]*len(ecg_mv)
-    for i in range(3, len(annotation) - 3, 9):
+    for i in range(3, len(annotation), 9):
         for k in range(annotation[i], annotation[i+2]+1):
             t[k] = 1
             background[k] = 0
@@ -84,7 +87,7 @@ def process_patient(base_filename, data_dir, lead = "i", start_index = 1000, end
             
             
     p = [0]*len(ecg_mv) 
-    for i in range(6, len(annotation) - 3, 9):
+    for i in range(6, len(annotation), 9):
         for k in range(annotation[i], annotation[i+2]+1):
             p[k] = 1
             background[k] = 0
@@ -103,9 +106,7 @@ def process_patient(base_filename, data_dir, lead = "i", start_index = 1000, end
     return ecg_tensor, label
         
         
-
-
-                
+           
 def create_and_save_dataset(data_dir, lead, test_size=0.2, random_seed=42):
         
     ecg_signals = []
@@ -168,58 +169,72 @@ if __name__ == "__main__":
     
     data_dir = '../LUDB'
     lead = "i"
+    
+  
+        
     # create_and_save_dataset(data_dir, lead)
     
     
-    train_dataset = torch.load(f'LUDB_{lead}_train_dataset.pt', weights_only=False)
-    test_dataset = torch.load(f'LUDB_{lead}_test_dataset.pt', weights_only=False)
+    
+    # train_dataset = torch.load(f'LUDB_{lead}_train_dataset.pt', weights_only=False)
+    # test_dataset = torch.load(f'LUDB_{lead}_test_dataset.pt', weights_only=False)
 
-    # Создание DataLoader
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    # # Создание DataLoader
+    # train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
+    # test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
     
-    # Создание модели
-    model = UNet(n_channels=1, n_classes=4)
+    # # Создание модели
+    # model = UNet(n_channels=1, n_classes=4)
     
-    # Обучение и сохранение модели
-    epochs=50
-    # train_model(model, train_loader, lead, epochs=50, lr=0.001)
+    # # Обучение и сохранение модели
+    # epochs=50
+    # # train_model(model, train_loader, lead, epochs=50, lr=0.001)
     
-    trained_model = torch.load(f"UNet_{lead}_{epochs}.pth", weights_only=False)
+    # trained_model = torch.load(f"UNet_{lead}_{epochs}.pth", weights_only=False)
     
-    signals, labels = next(iter(test_loader))
-    num = 0
-    signal = signals[num]
-    label_true = labels[num]
-    test_signal = signal.unsqueeze(0).unsqueeze(0)
+    # # signals, labels = next(iter(test_loader))
     
+    # k = 10
     
+    # for signals, labels in test_loader:
+    #     k+=1
+    #     if k == 10:
+    #         break
         
-    with torch.no_grad():
-        output = trained_model(test_signal)
-    label_pred = output[0]
-    
-    print(f"Input shape: {test_signal.shape}")
-    print(f"Output shape: {output.shape}")  # Should be (1, 4, 1000)
-    
-    
-    label = torch.argmax(label_pred, dim=0).numpy()
-    
-    print(set(label))
-    
-    fig, ax = plt.subplots()
-    
-    vizualization_signal(signal, fig, ax)
-    
-    colors = {
-        0: 'r',    # QRS
-        1: 'b',   # T
-        2: 'g',  # P
-        3: 'k'    # Background
-        }
-    
-    for i in range(len(label)):
-        ax.plot(i, signal[i], f'o{colors[label[i]]}', markersize=4)
+    #     num = 0
+    #     signal = signals[num]
+    #     # label_true = labels[num]
+    #     test_signal = signal.unsqueeze(0).unsqueeze(0)
+        
+        
+            
+    #     with torch.no_grad():
+    #         output = trained_model(test_signal)
+    #     label_pred = output[0]
+        
+    #     print(f"Input shape: {test_signal.shape}")
+    #     print(f"Output shape: {output.shape}")  # Should be (1, 4, 1000)
+        
+        
+    #     label = torch.argmax(label_pred, dim=0).numpy()
+        
+    #     print(set(label))
+        
+    #     fig, ax = plt.subplots()
+        
+    #     vizualization_signal(signal, fig, ax)
+        
+    #     colors = {
+    #         0: 'r',    # QRS
+    #         1: 'b',   # T
+    #         2: 'g',  # P
+    #         3: 'k'    # Background
+    #         }
+        
+    #     for i in range(len(label)):
+    #         ax.plot(i, signal[i], f'o{colors[label[i]]}', markersize=4)
+            
+    #     plt.show()
         
         
     
