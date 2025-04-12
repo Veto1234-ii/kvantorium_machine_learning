@@ -58,12 +58,14 @@ def process_patient(base_filename, data_dir, lead = "i", start_index = 1000, end
     
     idx_lead = lead_names.index(lead)
     
-    adc_signal = record.d_signal[:, idx_lead]  # Берём один канал
+    # adc_signal = record.d_signal[:, idx_lead]  # Берём один канал
        
-    # Преобразуем в физические единицы (мВ)
-    gain = record.adc_gain[idx_lead]  # Коэффициент усиления (например, 1000)
-    baseline = record.baseline[idx_lead]  # Смещение (обычно 0)
-    ecg_mv = (adc_signal - baseline) / gain
+    # # Преобразуем в физические единицы (мВ)
+    # gain = record.adc_gain[idx_lead]  # Коэффициент усиления (например, 1000)
+    # baseline = record.baseline[idx_lead]  # Смещение (обычно 0)
+    # ecg_mv = (adc_signal - baseline) / gain
+    
+    ecg_mv = record.d_signal[:, idx_lead]
       
     # Чтение аннотаций
     annotation = wfdb.rdann(record_path, lead).sample
@@ -136,8 +138,8 @@ def create_and_save_dataset(data_dir, lead, test_size=0.2, random_seed=42):
     )
         
     # Сохранение датасетов
-    torch.save(train_dataset, f'LUDB_{lead}_train_dataset.pt')
-    torch.save(test_dataset, f'LUDB_{lead}_test_dataset.pt')
+    torch.save(train_dataset, f'LUDB_{lead}_train_dataset_ADC.pt')
+    torch.save(test_dataset, f'LUDB_{lead}_test_dataset_ADC.pt')
     
     
 def train_model(model, train_loader,lead, epochs=50, lr=0.001):
@@ -146,23 +148,33 @@ def train_model(model, train_loader,lead, epochs=50, lr=0.001):
     
     optimizer = optim.Adam(model.parameters(), lr=lr)    
     
+    # цикл по количеству эпох обучения
     for epoch in range(epochs):
         
         model.train()
         
+        # цикл по батчам даталоадера
         for signals, labels in tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs}'):
             
+            # Обнулим сохраненные у оптимизатора значения градиентов
+            # перед следующим шагом обучения
             optimizer.zero_grad()
-                        
+            
+            # Вычислим предсказания нашей модели
             outputs = model(signals.unsqueeze(1))
             
+            # Посчитаем значение функции потерь на полученном предсказании
+            # ошибка
             loss = criterion(outputs, labels)
             
+            # Выполним подсчёт новых градиентов
             loss.backward()
             
+            # Выполним шаг градиентного спуска
             optimizer.step()
             
-    torch.save(model, f"UNet_{lead}_{epochs}.pth")
+    # сохраним обученную модель
+    torch.save(model, f"UNet_{lead}_{epochs}_ADC.pth")
     
 
 if __name__ == "__main__":
@@ -176,65 +188,65 @@ if __name__ == "__main__":
     
     
     
-    # train_dataset = torch.load(f'LUDB_{lead}_train_dataset.pt', weights_only=False)
-    # test_dataset = torch.load(f'LUDB_{lead}_test_dataset.pt', weights_only=False)
+    train_dataset = torch.load(f'LUDB_{lead}_train_dataset_ADC.pt', weights_only=False)
+    test_dataset = torch.load(f'LUDB_{lead}_test_dataset_ADC.pt', weights_only=False)
 
     # # Создание DataLoader
-    # train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-    # test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
     
-    # # Создание модели
-    # model = UNet(n_channels=1, n_classes=4)
+    # Создание модели
+    model = UNet(n_channels=1, n_classes=4)
     
-    # # Обучение и сохранение модели
-    # epochs=50
-    # # train_model(model, train_loader, lead, epochs=50, lr=0.001)
+    # Обучение и сохранение модели
+    epochs=50
+    # train_model(model, train_loader, lead, epochs=50, lr=0.001)
     
-    # trained_model = torch.load(f"UNet_{lead}_{epochs}.pth", weights_only=False)
+    trained_model = torch.load(f"UNet_{lead}_{epochs}_ADC.pth", weights_only=False)
     
-    # # signals, labels = next(iter(test_loader))
+    signals, labels = next(iter(test_loader))
     
-    # k = 10
+    k = 1
     
-    # for signals, labels in test_loader:
-    #     k+=1
-    #     if k == 10:
-    #         break
+    for signals, labels in test_loader:
+        k+=1
+        if k == 5:
+            break
         
-    #     num = 0
-    #     signal = signals[num]
-    #     # label_true = labels[num]
-    #     test_signal = signal.unsqueeze(0).unsqueeze(0)
+        num = 0
+        signal = signals[num]
+        # label_true = labels[num]
+        test_signal = signal.unsqueeze(0).unsqueeze(0)
         
         
             
-    #     with torch.no_grad():
-    #         output = trained_model(test_signal)
-    #     label_pred = output[0]
+        with torch.no_grad():
+            output = trained_model(test_signal)
+        label_pred = output[0]
         
-    #     print(f"Input shape: {test_signal.shape}")
-    #     print(f"Output shape: {output.shape}")  # Should be (1, 4, 1000)
+        print(f"Input shape: {test_signal.shape}")
+        print(f"Output shape: {output.shape}")  # Should be (1, 4, 1000)
         
         
-    #     label = torch.argmax(label_pred, dim=0).numpy()
+        label = torch.argmax(label_pred, dim=0).numpy()
         
-    #     print(set(label))
+        print(set(label))
         
-    #     fig, ax = plt.subplots()
+        fig, ax = plt.subplots()
         
-    #     vizualization_signal(signal, fig, ax)
+        vizualization_signal(signal, fig, ax)
         
-    #     colors = {
-    #         0: 'r',    # QRS
-    #         1: 'b',   # T
-    #         2: 'g',  # P
-    #         3: 'k'    # Background
-    #         }
+        colors = {
+            0: 'r',    # QRS
+            1: 'b',   # T
+            2: 'g',  # P
+            3: 'k'    # Background
+            }
         
-    #     for i in range(len(label)):
-    #         ax.plot(i, signal[i], f'o{colors[label[i]]}', markersize=4)
+        for i in range(len(label)):
+            ax.plot(i, signal[i], f'o{colors[label[i]]}', markersize=4)
             
-    #     plt.show()
+        plt.show()
         
         
     
